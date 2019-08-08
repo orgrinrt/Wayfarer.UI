@@ -1,6 +1,9 @@
 using System;
 using System.ComponentModel;
 using Godot;
+using Wayfarer.Core.Systems.Managers;
+using Wayfarer.Editor;
+using Wayfarer.Utils.Debug;
 
 namespace Wayfarer.UI.Controls
 {
@@ -28,12 +31,26 @@ namespace Wayfarer.UI.Controls
         public float SortAnimDuration => _sortAnimDuration;
         public float Separation => _separation;
         public float SortPrecision => _sortPrecision;
+
+        private bool _isNotConnected = false;
         
         public override void _Ready()
         {
             base._Ready();
 
             Connect("mouse_entered", this, nameof(OnMouseEntered));
+            
+            try
+            {
+                WayfarerEditorPlugin.Instance.MouseManager.Connect(nameof(MouseManager.StoppedDragging), this, nameof(OnGlobalDragStopped));
+                
+            }
+            catch (Exception e)
+            {
+                Log.Error("Couldn't connect to MouseManager's StoppedDragging signal", e, true);
+                _isNotConnected = true;
+            }
+            
         }
 
         public override string _GetConfigurationWarning()
@@ -51,6 +68,28 @@ namespace Wayfarer.UI.Controls
 
         public override void _Process(float delta)
         {
+            if (_isNotConnected)
+            {
+                _isNotConnected = false;
+                
+                try
+                {
+                    if (!WayfarerEditorPlugin.Instance.MouseManager.IsConnected(nameof(MouseManager.StoppedDragging), this, nameof(OnGlobalDragStopped)))
+                    {
+                        WayfarerEditorPlugin.Instance.MouseManager.Connect(nameof(MouseManager.StoppedDragging), this, nameof(OnGlobalDragStopped));
+                    }
+                    else
+                    {
+                        _isNotConnected = false;
+                    }
+                }
+                catch (Exception e)
+                {
+                    Log.Error("Couldn't connect to MouseManager's EndDrag() signal", e, true);
+                    _isNotConnected = true;
+                }
+            }
+            
             _hasNonOrganizableChildren = false;
             
             if (IsChildDragged && HoveredIndexChanged())
@@ -60,7 +99,6 @@ namespace Wayfarer.UI.Controls
             else if (!IsSortDone())
             {
                 SortX();
-                SortY();
             }
         }
 
@@ -109,9 +147,13 @@ namespace Wayfarer.UI.Controls
                             }
                         }
                     }
-                    else
+                    else if (!(node is OrganizableItem))
                     {
                         _hasNonOrganizableChildren = true;
+                    }
+                    else
+                    {
+                        _isChildDragged = true;
                     }
                 }
             }
@@ -134,21 +176,23 @@ namespace Wayfarer.UI.Controls
                         
                         if (SortDirection == SortDirection.Right)
                         {
-                            if (!item.Tween.IsActive() && item.GetIndex() > hoverIdx)
+                            if (item.GetIndex() > hoverIdx && Math.Abs(item.RectPosition.x - GetItemXPosByIndex(item.GetIndex())) < item.RectSize.x)
                             {
                                 Vector2 newPos = new Vector2(item.RectPosition.x + item.RectSize.x, item.RectPosition.y);
                                 item.Tween.InterpolateProperty(item, "rect_position", item.RectPosition, newPos,
                                     SortAnimDuration, Tween.TransitionType.Cubic, Tween.EaseType.Out);
+                                item.SetTargetPos(newPos);
                                 item.Tween.Start();
                             }
                         }
                         else if (SortDirection == SortDirection.Left)
                         {
-                            if (!item.Tween.IsActive() && item.GetIndex() > hoverIdx)
+                            if (item.GetIndex() > hoverIdx && Math.Abs(item.RectPosition.x - GetItemXPosByIndex(item.GetIndex())) < item.RectSize.x)
                             {
                                 Vector2 newPos = new Vector2(item.RectPosition.x - item.RectSize.x, item.RectPosition.y);
                                 item.Tween.InterpolateProperty(item, "rect_position", item.RectPosition, newPos,
                                     SortAnimDuration, Tween.TransitionType.Cubic, Tween.EaseType.Out);
+                                item.SetTargetPos(newPos);
                                 item.Tween.Start();
                             }
                         } 
@@ -157,66 +201,15 @@ namespace Wayfarer.UI.Controls
                     {
                         _hasNonOrganizableChildren = true;
                     }
+                    else
+                    {
+                        _isChildDragged = true;
+                    }
                 }
             }
         }
 
         private void SortX()
-        {
-            if (OrganizingMode == OrganizingMode.Horizontal)
-            {
-                float currEndX = SortDirection == SortDirection.Right ? 0f : (RectSize.x - GetChild<Control>(GetChildCount()-1).RectSize.x);
-                
-                foreach (Node node in GetChildren())
-                {
-                    if (node is OrganizableItem item && !item.IsDragged)
-                    {
-                        if (item.Tween == null)
-                        {
-                            item.CreateTween();
-                        }
-                        //if (item.GetIndex() > CurrHoveredIndex)
-                        //{
-                            if (SortDirection == SortDirection.Right)
-                            {
-                                if (!item.Tween.IsActive() && Math.Abs(item.RectPosition.x - currEndX) > SortPrecision)
-                                {
-                                    Vector2 newPos = new Vector2(currEndX, item.RectPosition.y);
-                                    item.Tween.InterpolateProperty(item, "rect_position", item.RectPosition, newPos,
-                                        SortAnimDuration, Tween.TransitionType.Cubic, Tween.EaseType.Out);
-                                    item.Tween.Start();
-                                }
-                            }
-                            else if (SortDirection == SortDirection.Left)
-                            {
-                                if (!item.Tween.IsActive() && Math.Abs(item.RectPosition.x - currEndX) > SortPrecision)
-                                {
-                                    Vector2 newPos = new Vector2(currEndX, item.RectPosition.y);
-                                    item.Tween.InterpolateProperty(item, "rect_position", item.RectPosition, newPos,
-                                        SortAnimDuration, Tween.TransitionType.Cubic, Tween.EaseType.Out);
-                                    item.Tween.Start();
-                                }
-                            }
-                        //}
-                    
-                        if (SortDirection == SortDirection.Right)
-                        {
-                            currEndX += (item.RectSize.x + Separation);
-                        }
-                        else if (SortDirection == SortDirection.Left)
-                        {
-                            currEndX -= (item.RectSize.x + Separation); 
-                        }
-                    }
-                    else if (!(node is OrganizableItem))
-                    {
-                        _hasNonOrganizableChildren = true;
-                    }
-                }
-            }
-        }
-
-        private void SortY()
         {
             if (OrganizingMode == OrganizingMode.Horizontal)
             {
@@ -229,28 +222,85 @@ namespace Wayfarer.UI.Controls
                             item.CreateTween();
                         }
                         
-                        int neighbourIdx = item.GetIndex() + 1;
-                
-                        if (GetChildCount() == item.GetIndex() + 1)
+                        if (SortDirection == SortDirection.Right)
                         {
-                            neighbourIdx = item.GetIndex() - 1;
+                            if (!item.Tween.IsActive() && Math.Abs(item.RectPosition.x - GetItemXPosByIndex(item.GetIndex())) > SortPrecision)
+                            {
+                                Vector2 newPos = new Vector2(GetItemXPosByIndex(item.GetIndex()), item.RectPosition.y);
+                                item.Tween.InterpolateProperty(item, "rect_position", item.RectPosition, newPos,
+                                    SortAnimDuration, Tween.TransitionType.Cubic, Tween.EaseType.Out);
+                                item.SetTargetPos(newPos);
+                                item.Tween.Start();
+                            }
                         }
-
-                        float y = GetChild<Control>(neighbourIdx).RectPosition.y;
-
-                        if (Math.Abs(item.RectPosition.y - y) > SortPrecision)
+                        else if (SortDirection == SortDirection.Left)
                         {
-                            item.Tween.InterpolateProperty(item, "rect_position_y", item.RectPosition.y, y,
-                                SortAnimDuration, Tween.TransitionType.Cubic, Tween.EaseType.Out);
-                            item.Tween.Start();
+                            if (!item.Tween.IsActive() && Math.Abs(item.RectPosition.x - GetItemXPosByIndex(item.GetIndex())) > SortPrecision)
+                            {
+                                Vector2 newPos = new Vector2(GetItemXPosByIndex(item.GetIndex()), item.RectPosition.y);
+                                item.Tween.InterpolateProperty(item, "rect_position", item.RectPosition, newPos,
+                                    SortAnimDuration, Tween.TransitionType.Cubic, Tween.EaseType.Out);
+                                item.SetTargetPos(newPos);
+                                item.Tween.Start();
+                            }
                         }
                     }
                     else if (!(node is OrganizableItem))
                     {
                         _hasNonOrganizableChildren = true;
                     }
+                    else
+                    {
+                        _isChildDragged = true;
+                    }
                 }
             }
+        }
+
+        private void SortY(OrganizableItem item)
+        {
+            if (OrganizingMode == OrganizingMode.Horizontal)
+            {
+                if (item.Tween == null)
+                {
+                    item.CreateTween();
+                }
+                
+                int neighbourIdx = item.GetIndex() + 1;
+        
+                if (GetChildCount() == item.GetIndex() + 1)
+                {
+                    neighbourIdx = item.GetIndex() - 1;
+                }
+
+                OrganizableItem neighbor = GetChild<OrganizableItem>(neighbourIdx);
+
+                float y = neighbor.RectPosition.y;
+
+                if (!neighbor.IsDragged && Math.Abs(item.RectPosition.y - y) > SortPrecision)
+                {
+                    Vector2 newPos = new Vector2(GetItemXPosByIndex(item.GetIndex()), y);
+                    item.Tween.InterpolateProperty(item, "rect_position", item.RectPosition, newPos,
+                        SortAnimDuration, Tween.TransitionType.Cubic, Tween.EaseType.Out);
+                    item.Tween.Start();
+                }
+            }
+        }
+
+        private float GetItemXPosByIndex(int idx)
+        {
+            float currEndX = SortDirection == SortDirection.Right ? 0f : (RectSize.x - GetChild<Control>(GetChildCount()-1).RectSize.x);
+
+            foreach (Node node in GetChildren())
+            {
+                if (node is OrganizableItem item && item.GetIndex() <= idx - 1)
+                {
+                    currEndX += (item.RectSize.x + Separation);
+                }
+                else break;
+            }
+
+            return currEndX;
         }
 
         private bool IsSortDone()
@@ -301,6 +351,10 @@ namespace Wayfarer.UI.Controls
                     {
                         _hasNonOrganizableChildren = true;
                     }
+                    else
+                    {
+                        _isChildDragged = true;
+                    }
                     
                     continue;
                 }
@@ -314,6 +368,23 @@ namespace Wayfarer.UI.Controls
             if (IsChildDragged)
             {
                 
+            }
+        }
+
+        private void OnGlobalDragStopped(Node node)
+        {
+            _isChildDragged = false;
+
+            if (node is OrganizableItem item)
+            {
+                foreach (Node child in GetChildren())
+                {
+                    if (item == child)
+                    {
+                        MoveChild(item, CurrHoveredIndex);
+                        SortY(item);
+                    }
+                }
             }
         }
     }
