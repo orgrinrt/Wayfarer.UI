@@ -16,13 +16,15 @@ namespace Wayfarer.UI.Controls
         private bool _mouseOver = false;
         private bool _isDragged = false;
         private MouseManager _mouseManager;
+        private Vector2 _targetPos;
 
         public Tween Tween => _tween;
         public bool MouseOver => _mouseOver;
         public bool IsDragged => _isDragged;
         public MouseManager MouseManager => GetMouseManager();
+        public Vector2 TargetPos => _targetPos;
 
-        private bool _isNotConnected = true;
+        private bool _isNotConnected = false;
         
         public override void _EnterTree()
         {
@@ -41,12 +43,28 @@ namespace Wayfarer.UI.Controls
             try
             {
                 MouseManager.Connect(nameof(MouseManager.StoppedDragging), this, nameof(EndDrag));
+               
             }
             catch (Exception e)
             {
                 Log.Error("Couldn't connect to MouseManager's EndDrag() signal", e, true);
+                _isNotConnected = true;
             }
+            
+            SetDefaultCursorShape(CursorShape.Drag);
         }
+/*
+        public override void _Notification(int what)
+        {
+            if (what == NotificationMouseEnter)
+            {
+                OnMouseEntered();
+            }
+            else if (what == NotificationMouseExit)
+            {
+                OnMouseExited();
+            }
+        }*/
 
         public override void _Process(float delta)
         {
@@ -58,7 +76,14 @@ namespace Wayfarer.UI.Controls
                 
                 try
                 {
-                    MouseManager.Connect(nameof(MouseManager.StoppedDragging), this, nameof(EndDrag));
+                    if (!MouseManager.IsConnected(nameof(MouseManager.StoppedDragging), this, nameof(EndDrag)))
+                    {
+                        MouseManager.Connect(nameof(MouseManager.StoppedDragging), this, nameof(EndDrag));
+                    }
+                    else
+                    {
+                        _isNotConnected = false;
+                    }
                 }
                 catch (Exception e)
                 {
@@ -129,6 +154,11 @@ namespace Wayfarer.UI.Controls
             }
 
             return _mouseManager;
+        }
+
+        public void SetTargetPos(Vector2 pos)
+        {
+            _targetPos = pos;
         }
 
         private void OnMouseEntered()
