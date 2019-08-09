@@ -31,26 +31,19 @@ namespace Wayfarer.UI.Controls
         public float SortAnimDuration => _sortAnimDuration;
         public float Separation => _separation;
         public float SortPrecision => _sortPrecision;
-
-        private bool _isNotConnected = false;
         
-        public override void _Ready()
+        public override void _ReadySafe()
         {
-            base._Ready();
-
             Connect("mouse_entered", this, nameof(OnMouseEntered));
             
             try
             {
-                WayfarerEditorPlugin.Instance.MouseManager.Connect(nameof(MouseManager.StoppedDragging), this, nameof(OnGlobalDragStopped));
-                
+                Connections.Add(MouseManager, nameof(MouseManager.StoppedDragging), this, nameof(OnGlobalDragStopped));
             }
             catch (Exception e)
             {
-                Log.Error("Couldn't connect to MouseManager's StoppedDragging signal", e, true);
-                _isNotConnected = true;
+                Connections.Add(GetMouseManager, nameof(MouseManager.StoppedDragging), this, nameof(OnGlobalDragStopped));
             }
-            
         }
 
         public override string _GetConfigurationWarning()
@@ -66,30 +59,8 @@ namespace Wayfarer.UI.Controls
                 ;
         }
 
-        public override void _Process(float delta)
+        public override void _ProcessSafe(float delta)
         {
-            if (_isNotConnected)
-            {
-                _isNotConnected = false;
-                
-                try
-                {
-                    if (!WayfarerEditorPlugin.Instance.MouseManager.IsConnected(nameof(MouseManager.StoppedDragging), this, nameof(OnGlobalDragStopped)))
-                    {
-                        WayfarerEditorPlugin.Instance.MouseManager.Connect(nameof(MouseManager.StoppedDragging), this, nameof(OnGlobalDragStopped));
-                    }
-                    else
-                    {
-                        _isNotConnected = false;
-                    }
-                }
-                catch (Exception e)
-                {
-                    Log.Error("Couldn't connect to MouseManager's EndDrag() signal", e, true);
-                    _isNotConnected = true;
-                }
-            }
-            
             _hasNonOrganizableChildren = false;
             
             if (IsChildDragged && HoveredIndexChanged())
