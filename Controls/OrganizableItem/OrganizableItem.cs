@@ -16,12 +16,10 @@ namespace Wayfarer.UI.Controls
         private Tween _tween;
         private bool _mouseOver = false;
         private bool _isDragged = false;
-        private Vector2 _targetPos;
 
         public Tween Tween => _tween;
         public bool MouseOver => _mouseOver;
         public bool IsDragged => _isDragged;
-        public Vector2 TargetPos => _targetPos;
 
         public override void _EnterTreeSafe()
         {
@@ -47,6 +45,7 @@ namespace Wayfarer.UI.Controls
         public override void _ReadySafe()
         {
             SetDefaultCursorShape(CursorShape.Drag);
+            SetMouseFilter(MouseFilterEnum.Pass);
         }
 
         public override void _ProcessSafe(float delta)
@@ -67,6 +66,7 @@ namespace Wayfarer.UI.Controls
         
         public void StartDrag()
         {
+            Tween.StopAll();
             _isDragged = true;
             MouseManager.StartDragging(this, GetLocalMousePosition());
         }
@@ -96,9 +96,9 @@ namespace Wayfarer.UI.Controls
             AddChild(_tween);
         }
 
-        public void SetTargetPos(Vector2 pos)
+        public void SetIsDragged(bool value)
         {
-            _targetPos = pos;
+            _isDragged = value;
         }
 
         private void OnMouseEntered()
@@ -109,6 +109,7 @@ namespace Wayfarer.UI.Controls
         private void OnMouseExited()
         {
             _mouseOver = false;
+            _isDragged = false;
         }
     }
 }

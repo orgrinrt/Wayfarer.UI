@@ -12,19 +12,22 @@ namespace Wayfarer.UI.Controls
 {
     public class WayfarerControl : Control, ISignalConnectionHandled
     {
+
+        [Export()] private string _nameOfRoot;
+        
         private SignalConnectionHandler _connections = new SignalConnectionHandler();
         private MouseManager _mouseManager;
+        private bool _cachedHasTabContainerParent = false;
         
         public SignalConnectionHandler Connections => _connections;
         public MouseManager MouseManager => GetMouseManager();
+        public bool CachedHasTabContainerParent => _cachedHasTabContainerParent;
         
         #if TOOLS
         public bool ResetOnReady => WayfarerProjectSettings.ResetOnReady;
 
         private bool _cachedResetOnReady = true;
         #endif
-        
-        //SCRIPT ERROR: custom_build: Invalid get index '[EditorInterface:11621]' (on base: 'String').
 
         public override void _EnterTree()
         {
@@ -32,6 +35,16 @@ namespace Wayfarer.UI.Controls
             _cachedResetOnReady = ResetOnReady;
             if (_cachedResetOnReady) return;
             #endif
+
+            if (HasATabContainerParent())
+            {
+                _cachedHasTabContainerParent = true;
+                return;
+            }
+            else
+            {
+                _cachedHasTabContainerParent = false;
+            }
             
             base._EnterTree();
             _EnterTreeSafe();
@@ -42,6 +55,11 @@ namespace Wayfarer.UI.Controls
             #if TOOLS
             if (_cachedResetOnReady) return;
             #endif
+            
+            if (CachedHasTabContainerParent)
+            {
+                return;
+            }
             
             base._Ready();
             this.SetupWayfarer();
@@ -56,8 +74,13 @@ namespace Wayfarer.UI.Controls
             if (_cachedResetOnReady) return;
             #endif
             
+            if (CachedHasTabContainerParent)
+            {
+                return;
+            }
+            
             base._Process(delta);
-            Connections.Update();
+            Connections?.Update();
             _ProcessSafe(delta);
         }
 
@@ -66,6 +89,11 @@ namespace Wayfarer.UI.Controls
             #if TOOLS
             if (_cachedResetOnReady) return;
             #endif    
+            
+            if (CachedHasTabContainerParent)
+            {
+                return;
+            }
             
             base._ExitTree();
             _ExitTreeSafe();
@@ -98,6 +126,16 @@ namespace Wayfarer.UI.Controls
             
         }
 
+        private bool HasATabContainerParent()
+        {
+            if (this.GetParentOfType<TabContainer>() != null)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
         public MouseManager GetMouseManager()
         {
             if (!IsInstanceValid(_mouseManager) || _mouseManager == null)
@@ -116,12 +154,6 @@ namespace Wayfarer.UI.Controls
                 {
                     Log.Wf.Error("Couldn't get MouseManager from the EditorPlugin singleton", e, true);
                 }
-                
-            }
-
-            if (IsInstanceValid(_mouseManager))
-            {
-                Log.Wf.Print("WE GOT A REFERENCE TO THE SINGLETON SOMEHOW", true);
             }
             
             return _mouseManager;
