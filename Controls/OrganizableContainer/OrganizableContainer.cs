@@ -15,6 +15,7 @@ namespace Wayfarer.UI.Controls
     {
         [Export(PropertyHint.Enum, "Horizontal, Vertical")] private OrganizingMode _organizingMode = OrganizingMode.Horizontal;
         [Export(PropertyHint.Enum, "Right, Left")] private SortDirection _sortDirection = SortDirection.Right;
+        [Export(PropertyHint.Enum, "End, Middle, Start")] private SwitchThreshold _switchThreshold = SwitchThreshold.Middle;
         [Export()] private bool _regularSizeChildren = false;
         [Export()] private float _regularSize = float.MaxValue;
         [Export()] private bool _isMouseOver = false;
@@ -30,6 +31,7 @@ namespace Wayfarer.UI.Controls
 
         public OrganizingMode OrganizingMode => _organizingMode;
         public SortDirection SortDirection => _sortDirection;
+        public SwitchThreshold SwitchThreshold => _switchThreshold;
         public bool RegularSizeChildren => _regularSizeChildren;
         public float RegularSize => _regularSize;
         public bool IsMouseOver => _isMouseOver;
@@ -131,24 +133,11 @@ namespace Wayfarer.UI.Controls
                 {
                     return -1;
                 }
-                
+                /*
                 if (RegularSizeChildren)
                 {
-                    if (SortDirection == SortDirection.Right)
-                    {
-                        float mousePosX = GetLocalMousePosition().x - (Separation * 3);
-                        int idx = Mathf.RoundToInt(mousePosX / (RegularSize + Separation));
-                        return Mathf.Clamp(idx, 0, GetChildCount() - 1);
-                    }
-                    else if (SortDirection == SortDirection.Left)
-                    {
-                        float mousePosX = GetLocalMousePosition().x - (Separation * 4);
-                        float maxX = RectSize.x - RegularSize;
-                        mousePosX = maxX - mousePosX;
-                        int idx = Mathf.RoundToInt(mousePosX / (RegularSize + Separation));
-                        return Mathf.Clamp(idx, 0, GetChildCount() - 1);
-                    }
-                }
+                    // wonder if there's optimizations to do here
+                }*/
                 else
                 {
                     foreach (Node node in GetChildren())
@@ -162,7 +151,20 @@ namespace Wayfarer.UI.Controls
                             
                             if (SortDirection == SortDirection.Right)
                             {
-                                float itemCenterX = GetItemXPosByIndex(item.GetIndex()) + (item.RectSize.x * 1f);
+                                float itemCenterX = GetItemXPosByIndex(item.GetIndex());
+
+                                switch (SwitchThreshold)
+                                {
+                                    case SwitchThreshold.End:
+                                        itemCenterX += (item.RectSize.x * 1f);
+                                        break;
+                                    case SwitchThreshold.Middle:
+                                        itemCenterX += (item.RectSize.x * 1f) + (Separation / 2);
+                                        break;
+                                    case SwitchThreshold.Start:
+                                        itemCenterX += (item.RectSize.x * 1f) + Separation;
+                                        break;
+                                }
                                 
                                 if (GetLocalMousePosition().x > itemCenterX)
                                 {
@@ -174,6 +176,19 @@ namespace Wayfarer.UI.Controls
                             else if (SortDirection == SortDirection.Left)
                             {
                                 float itemCenterX = GetItemXPosByIndex(item.GetIndex());
+
+                                switch (SwitchThreshold)
+                                {
+                                    case SwitchThreshold.End:
+                                        break;
+                                    case SwitchThreshold.Middle:
+                                        itemCenterX -= (Separation / 2);
+                                        break;
+                                    case SwitchThreshold.Start:
+                                        itemCenterX -= Separation;
+                                        break;
+                                }
+                                
                                 if (GetLocalMousePosition().x < itemCenterX)
                                 {
                                     continue;
@@ -499,5 +514,12 @@ namespace Wayfarer.UI.Controls
     {
         Right,
         Left
+    }
+
+    public enum SwitchThreshold
+    {
+        End,
+        Middle,
+        Start
     }
 }
