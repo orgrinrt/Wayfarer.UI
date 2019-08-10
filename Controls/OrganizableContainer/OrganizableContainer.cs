@@ -13,22 +13,25 @@ namespace Wayfarer.UI.Controls
     #endif
     public class OrganizableContainer : WayfarerControl
     {
-        [Export(PropertyHint.Enum, "Horizontal, Vertical, Grid")] private OrganizingMode _organizingMode = OrganizingMode.Horizontal;
+        [Export(PropertyHint.Enum, "Horizontal, Vertical")] private OrganizingMode _organizingMode = OrganizingMode.Horizontal;
         [Export(PropertyHint.Enum, "Right, Left")] private SortDirection _sortDirection = SortDirection.Right;
         [Export()] private bool _regularSizeChildren = false;
+        [Export()] private float _regularSize = float.MaxValue;
         [Export()] private bool _isMouseOver = false;
         [Export()] private OrganizableItem _draggedChild;
         [Export()] private bool _hasNonOrganizableChildren = false;
         [Export()] private float _sortAnimDuration = 0.4f;
         [Export()] private float _separation = 5f;
         [Export()] private float _sortPrecision = 0.5f;
-        [Export()] private float _axisAnchor = -999999f;
-        [Export()] private float _hoverShift = 15f;
+        [Export()] private float _axisAnchor = float.MaxValue;
+        [Export()] private bool _changed = false;
+        [Export()] private bool _lowPerformance = false;
         
 
         public OrganizingMode OrganizingMode => _organizingMode;
         public SortDirection SortDirection => _sortDirection;
         public bool RegularSizeChildren => _regularSizeChildren;
+        public float RegularSize => _regularSize;
         public bool IsMouseOver => _isMouseOver;
         public OrganizableItem DraggedChild => _draggedChild;
         public bool HasNonOrganizableChildren => _hasNonOrganizableChildren;
@@ -37,7 +40,8 @@ namespace Wayfarer.UI.Controls
         public float Separation => _separation;
         public float SortPrecision => _sortPrecision;
         public float AxisAnchor => _axisAnchor;
-        public float HoverShift => _hoverShift;
+        public bool Changed => _changed;
+        public bool LowPerformance => _lowPerformance;
         
         public override void _ReadySafe()
         {
@@ -53,15 +57,19 @@ namespace Wayfarer.UI.Controls
                 Connections.Add(GetMouseManager, nameof(MouseManager.StoppedDragging), this, nameof(OnGlobalDragStopped));
             }
 
-            if (GetChildCount() > 0 && Math.Abs(_axisAnchor - (-999999f)) < SortPrecision)
+            if (GetChildCount() > 0 && Math.Abs(_axisAnchor - float.MaxValue) < SortPrecision)
             {
+                Control child = GetChild<Control>(0);
+                
                 if (OrganizingMode == OrganizingMode.Horizontal)
                 {
-                    _axisAnchor = GetChild<Control>(0).RectPosition.y;
+                    _axisAnchor = child.RectPosition.y;
+                    _regularSize = child.RectSize.x;
                 }
                 else if (OrganizingMode == OrganizingMode.Vertical)
                 {
-                    _axisAnchor = GetChild<Control>(0).RectPosition.x;
+                    _axisAnchor = child.RectPosition.x;
+                    _regularSize = child.RectSize.y;
                 }
             }
         }
@@ -80,10 +88,12 @@ namespace Wayfarer.UI.Controls
 
         public override void _ProcessSafe(float delta)
         {
+            #if TOOLS
             if (HasNonOrganizableChildren)
             {
                 _hasNonOrganizableChildren = false;
             }
+            #endif
             
             if (DraggedChild != null)
             {
@@ -94,9 +104,22 @@ namespace Wayfarer.UI.Controls
                 }
             }
             
-            if (!IsSortDone())
+            if (Changed)
             {
+                if (IsSortDone())
+                {
+                    _changed = false;
+                    return;
+                }
                 SortAll();
+            }
+        }
+
+        public override void _Input(InputEvent @event)
+        {
+            if (@event is InputEventMouseButton)
+            {
+                _changed = true;
             }
         }
 
@@ -108,9 +131,23 @@ namespace Wayfarer.UI.Controls
                 {
                     return -1;
                 }
+                
                 if (RegularSizeChildren)
                 {
-                    // we can do a simple math calc for optimization
+                    if (SortDirection == SortDirection.Right)
+                    {
+                        float mousePosX = GetLocalMousePosition().x - (Separation * 3);
+                        int idx = Mathf.RoundToInt(mousePosX / (RegularSize + Separation));
+                        return Mathf.Clamp(idx, 0, GetChildCount() - 1);
+                    }
+                    else if (SortDirection == SortDirection.Left)
+                    {
+                        float mousePosX = GetLocalMousePosition().x - (Separation * 4);
+                        float maxX = RectSize.x - RegularSize;
+                        mousePosX = maxX - mousePosX;
+                        int idx = Mathf.RoundToInt(mousePosX / (RegularSize + Separation));
+                        return Mathf.Clamp(idx, 0, GetChildCount() - 1);
+                    }
                 }
                 else
                 {
@@ -136,7 +173,7 @@ namespace Wayfarer.UI.Controls
                             }
                             else if (SortDirection == SortDirection.Left)
                             {
-                                float itemCenterX = GetItemXPosByIndex(item.GetIndex()) + (item.RectSize.x * 1f);
+                                float itemCenterX = GetItemXPosByIndex(item.GetIndex());
                                 if (GetLocalMousePosition().x < itemCenterX)
                                 {
                                     continue;
@@ -171,6 +208,11 @@ namespace Wayfarer.UI.Controls
                         
                         if (SortDirection == SortDirection.Right)
                         {
+                            if (LowPerformance && item.Tween.IsActive())
+                            {
+                                continue;
+                            }
+                            
                             if (Math.Abs(item.RectPosition.x - GetItemXPosByIndex(item.GetIndex())) > SortPrecision)
                             {
                                 Vector2 newPos = new Vector2(GetItemXPosByIndex(item.GetIndex()), AxisAnchor);
@@ -185,6 +227,11 @@ namespace Wayfarer.UI.Controls
                         }
                         else if (SortDirection == SortDirection.Left)
                         {
+                            if (LowPerformance && item.Tween.IsActive())
+                            {
+                                continue;
+                            }
+                            
                             if (Math.Abs(item.RectPosition.x - GetItemXPosByIndex(item.GetIndex())) > SortPrecision)
                             {
                                 Vector2 newPos = new Vector2(GetItemXPosByIndex(item.GetIndex()), AxisAnchor);
@@ -254,8 +301,17 @@ namespace Wayfarer.UI.Controls
         {
             if (RegularSizeChildren)
             {
-                // we can do simple math for optimization
-                return 0f;
+                if (SortDirection == SortDirection.Right)
+                {
+                    return idx * (RegularSize + Separation);
+                }
+                else if (SortDirection == SortDirection.Left)
+                {
+                    //float maxX = GetChildCount() * (RegularSize + Separation);
+                    float maxX = RectSize.x - RegularSize;
+                    
+                    return maxX - (idx * (RegularSize + Separation));
+                }
             }
             else
             {
@@ -265,13 +321,22 @@ namespace Wayfarer.UI.Controls
                 {
                     if (node is OrganizableItem item && item.GetIndex() <= idx - 1)
                     {
-                        currEndX += (item.RectSize.x + Separation);
+                        if (SortDirection == SortDirection.Right)
+                        {
+                            currEndX += (item.RectSize.x + Separation);
+                        }
+                        else if (SortDirection == SortDirection.Left)
+                        {
+                            currEndX -= (item.RectSize.x + Separation);
+                        }
                     }
                     else break;
                 }
 
                 return currEndX;
             }
+
+            return 0f;
         }
 
         public bool IsSortDone()
@@ -280,11 +345,37 @@ namespace Wayfarer.UI.Controls
             {
                 if (RegularSizeChildren)
                 {
-                    // again we can do simple math for optimization
+                    foreach (Node node in GetChildren())
+                    {
+                        if (node is OrganizableItem item && !item.IsDragged)
+                        {
+                            if (Math.Abs(item.RectPosition.y - AxisAnchor) > SortPrecision)
+                            {
+                                return false;
+                            }
+
+                            if (Math.Abs(item.RectPosition.x - GetItemXPosByIndex(item.GetIndex())) > SortPrecision)
+                            {
+                                return false;
+                            }
+                        }
+                        else if (!(node is OrganizableItem))
+                        {
+                            _hasNonOrganizableChildren = true;
+                        }
+                        else
+                        {
+                            _draggedChild = node as OrganizableItem;
+                            _changed = true;
+                            return false;
+                        }
+                    }
+
+                    return true;
                 }
                 else
                 {
-                    float currEndX = SortDirection == SortDirection.Right ? 0f : RectSize.x;
+                    float currEndX = SortDirection == SortDirection.Right ? 0f : RectSize.x - GetChild<Control>(GetChildCount()-1).RectSize.x;
 
                     foreach (Node node in GetChildren())
                     {
@@ -336,6 +427,8 @@ namespace Wayfarer.UI.Controls
                         else
                         {
                             _draggedChild = node as OrganizableItem;
+                            _changed = true;
+                            return false;
                         }
                     }
                 }
@@ -366,18 +459,40 @@ namespace Wayfarer.UI.Controls
                     {
                         item.SetIsDragged(false);
                         MoveChild(item, CurrHoveredIndex);
-                        SortY(item);
                     }
                 }
             }
+        }
+
+        public void SetRegularSizedChildren(bool value)
+        {
+            _regularSizeChildren = value;
+            
+            if (GetChildCount() > 0)
+            {
+                Control child = GetChild<Control>(0);
+                
+                if (OrganizingMode == OrganizingMode.Horizontal)
+                {
+                    _regularSize = child.RectSize.x;
+                }
+                else if (OrganizingMode == OrganizingMode.Vertical)
+                {
+                    _regularSize = child.RectSize.y;
+                }
+            }
+        }
+
+        public void SetSortDirection(SortDirection dir)
+        {
+            _sortDirection = dir;
         }
     }
     
     public enum OrganizingMode
     {
         Vertical,
-        Horizontal,
-        Grid
+        Horizontal
     }
 
     public enum SortDirection
