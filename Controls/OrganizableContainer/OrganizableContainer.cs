@@ -19,8 +19,13 @@ namespace Wayfarer.UI.Controls
         private OrganizingMode _organizingMode = OrganizingMode.Horizontal;
         private SortDirection _sortDirection = SortDirection.Right;
         private SwitchThreshold _switchThreshold = SwitchThreshold.Middle;
+        private HorizontalAlignment _horizontalAlignment = HorizontalAlignment.Left;
+        private VerticalAlignment _verticalAlignment = VerticalAlignment.Top;
+        private Array _acceptedGroups;
+        private bool _allowDroppingFromOtherContainers = true;
         private bool _regularSizeChildren = false;
         private bool _lowPerformance = false;
+        private bool _noShifting = false;
         private float _sortAnimDuration = 0.4f;
         private float _separation = 5f;
         private float _sortPrecision = 0.5f;
@@ -37,8 +42,13 @@ namespace Wayfarer.UI.Controls
         public OrganizingMode OrganizingMode => _organizingMode;
         public SortDirection SortDirection => _sortDirection;
         public SwitchThreshold SwitchThreshold => _switchThreshold;
+        public HorizontalAlignment HorizontalAlignment => _horizontalAlignment;
+        public VerticalAlignment VerticalAlignment => _verticalAlignment;
+        public Array AcceptedGroups => _acceptedGroups;
+        public bool AllowDroppingFromOtherContainers => _allowDroppingFromOtherContainers;
         public bool RegularSizeChildren => _regularSizeChildren;
         public bool LowPerformance => _lowPerformance;
+        public bool NoShifting => _noShifting;
         public float SortAnimDuration => _sortAnimDuration;
         public float Separation => _separation;
         public float SortPrecision => _sortPrecision;
@@ -109,6 +119,20 @@ namespace Wayfarer.UI.Controls
             };
             list.Add(header);
             
+            Dictionary allowDropping = new Dictionary
+            {
+                {"name", "dropping/allow_dropping"},
+                {"type", Variant.Type.Bool},
+            };
+            list.Add(allowDropping);
+
+            Dictionary acceptedGroups = new Dictionary
+            {
+                {"name", "dropping/accepted_groups"},
+                {"type", Variant.Type.Array},
+            };
+            list.Add(acceptedGroups);
+            
             Dictionary orgMode = new Dictionary
             {
                 {"name", "layout/organizing_mode"},
@@ -118,9 +142,27 @@ namespace Wayfarer.UI.Controls
             };
             list.Add(orgMode);
             
+            Dictionary hAlign = new Dictionary
+            {
+                {"name", "layout/horizontal_alignment"},
+                {"type", Variant.Type.Int},
+                {"hint", PropertyHint.Enum},
+                {"hint_string", "Left, Center, Right"},
+            };
+            list.Add(hAlign);
+            
+            Dictionary vAlign = new Dictionary
+            {
+                {"name", "layout/vertical_alignment"},
+                {"type", Variant.Type.Int},
+                {"hint", PropertyHint.Enum},
+                {"hint_string", "Top, Center, Bottom"},
+            };
+            list.Add(vAlign);
+            
             Dictionary sortDir = new Dictionary
             {
-                {"name", "behaviour/sort_direction"},
+                {"name", "layout/sort_direction"},
                 {"type", Variant.Type.Int},
                 {"hint", PropertyHint.Enum},
                 {"hint_string", "Right, Left"},
@@ -170,6 +212,13 @@ namespace Wayfarer.UI.Controls
                 {"type", Variant.Type.Bool},
             };
             list.Add(lowPerf);
+            
+            Dictionary noShift = new Dictionary
+            {
+                {"name", "optimizations/disable_shifting"},
+                {"type", Variant.Type.Bool},
+            };
+            list.Add(noShift);
 
             return list;
         }
@@ -180,12 +229,20 @@ namespace Wayfarer.UI.Controls
             {
                 case "layout/organizing_mode":
                     return OrganizingMode;
-                case "behaviour/sort_direction":
+                case "dropping//allow_dropping":
+                    return AllowDroppingFromOtherContainers;
+                case "dropping//accepted_groups":
+                    return AcceptedGroups;
+                case "layout/sort_direction":
                     return SortDirection;
                 case "behaviour/switch_threshold":
                     return SwitchThreshold;
                 case "layout/separation":
                     return Separation;
+                case "layout/horizontal_alignment":
+                    return HorizontalAlignment;
+                case "layout/vertical_alignment":
+                    return VerticalAlignment;
                 case "behaviour/sort_precision":
                     return SortPrecision;
                 case "behaviour/sort_animation_duration":
@@ -194,6 +251,8 @@ namespace Wayfarer.UI.Controls
                     return RegularSizeChildren;
                 case "optimizations/low_performance_mode":
                     return LowPerformance;
+                case "optimizations/disable_shifting":
+                    return NoShifting;
             }
             
             return base._Get(property);
@@ -206,7 +265,13 @@ namespace Wayfarer.UI.Controls
                 case "layout/organizing_mode":
                     _organizingMode = (OrganizingMode) value;
                     break;
-                case "behaviour/sort_direction":
+                case "dropping//allow_dropping":
+                    _allowDroppingFromOtherContainers = (bool) value;
+                    break;
+                case "dropping//accepted_groups":
+                    _acceptedGroups = (Array) value;
+                    break;
+                case "layout/sort_direction":
                     _sortDirection = (SortDirection) value;
                     break;
                 case "behaviour/switch_threshold":
@@ -214,6 +279,12 @@ namespace Wayfarer.UI.Controls
                     break;
                 case "layout/separation":
                     _separation = (float) value;
+                    break;
+                case "layout/horizontal_alignment":
+                    _horizontalAlignment = (HorizontalAlignment) value;
+                    break;
+                case "layout/vertical_alignment":
+                    _verticalAlignment = (VerticalAlignment) value;
                     break;
                 case "behaviour/sort_precision":
                     _sortPrecision = (float) value;
@@ -226,6 +297,9 @@ namespace Wayfarer.UI.Controls
                     break;
                 case "optimizations/low_performance_mode":
                     _lowPerformance = (bool) value;
+                    break;
+                case "optimizations/disable_shifting":
+                    _noShifting = (bool) value;
                     break;
             }
             
@@ -241,7 +315,7 @@ namespace Wayfarer.UI.Controls
             }
             #endif
             
-            if (DraggedChild != null)
+            if (DraggedChild != null && !NoShifting)
             {
                 int hover = GetCurrHoveredIndex();
                 if (DraggedChild.GetIndex() != hover && hover > -1 && hover < GetChildCount())
@@ -361,7 +435,7 @@ namespace Wayfarer.UI.Controls
                 {
                     if (node is OrganizableItem item && !item.IsDragged)
                     {
-                        SortX(item);
+                        SortHorizontal(item);
                     }
                 }
             }
@@ -375,7 +449,7 @@ namespace Wayfarer.UI.Controls
             }
         }
 
-        private void SortX(OrganizableItem item)
+        private void SortHorizontal(OrganizableItem item)
         {
             if (OrganizingMode == OrganizingMode.Horizontal)
             {
@@ -383,38 +457,45 @@ namespace Wayfarer.UI.Controls
                 {
                     item.CreateTween();
                 }
-                
-                if (LowPerformance && item.Tween.IsActive())
-                {
-                    return;
-                }
-                        
+                     
                 if (SortDirection == SortDirection.Right)
                 {
-                    if (Math.Abs(item.RectPosition.x - GetItemXPosByIndex(item.GetIndex())) > SortPrecision)
+                    if (Math.Abs(item.RectPosition.x - GetItemXPosByIndex(item.GetIndex())) > SortPrecision || Math.Abs(item.RectPosition.y - AxisAnchor) > SortPrecision)
                     {
                         Vector2 newPos = new Vector2(GetItemXPosByIndex(item.GetIndex()), AxisAnchor);
                                 
-                        item.Tween.Stop(item, "rect_position");
-                                
+                        if (!LowPerformance)
+                        {
+                            item.Tween.Stop(item, "rect_position");
+                        }
+                            
                         item.Tween.InterpolateProperty(item, "rect_position", item.RectPosition, newPos,
                             SortAnimDuration, Tween.TransitionType.Cubic, Tween.EaseType.Out);
                                 
-                        item.Tween.Start();
+                        if (!LowPerformance || !item.Tween.IsActive())
+                        {
+                            item.Tween.Start();
+                        }
                     }
                 }
                 else if (SortDirection == SortDirection.Left)
                 {
-                    if (Math.Abs(item.RectPosition.x - GetItemXPosByIndex(item.GetIndex())) > SortPrecision)
+                    if (Math.Abs(item.RectPosition.x - GetItemXPosByIndex(item.GetIndex())) > SortPrecision || Math.Abs(item.RectPosition.y - AxisAnchor) > SortPrecision)
                     {
                         Vector2 newPos = new Vector2(GetItemXPosByIndex(item.GetIndex()), AxisAnchor);
                                 
-                        item.Tween.Stop(item, "rect_position");
+                        if (!LowPerformance)
+                        {
+                            item.Tween.Stop(item, "rect_position");
+                        }
                                 
                         item.Tween.InterpolateProperty(item, "rect_position", item.RectPosition, newPos,
                             SortAnimDuration, Tween.TransitionType.Cubic, Tween.EaseType.Out);
                                 
-                        item.Tween.Start();
+                        if (!LowPerformance || !item.Tween.IsActive())
+                        {
+                            item.Tween.Start();
+                        }
                     }
                 }
             }
@@ -645,5 +726,19 @@ namespace Wayfarer.UI.Controls
         End,
         Middle,
         Start
+    }
+
+    public enum HorizontalAlignment
+    {
+        Left,
+        Center,
+        Right
+    }
+
+    public enum VerticalAlignment
+    {
+        Top,
+        Center,
+        Bottom
     }
 }
