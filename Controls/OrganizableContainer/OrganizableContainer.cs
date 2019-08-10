@@ -1,10 +1,13 @@
 using System;
+using System.Collections;
 using System.ComponentModel;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Godot;
+using Godot.Collections;
 using Wayfarer.Core.Systems.Managers;
 using Wayfarer.Editor;
 using Wayfarer.Utils.Debug;
+using Array = Godot.Collections.Array;
 
 namespace Wayfarer.UI.Controls
 {
@@ -13,37 +16,41 @@ namespace Wayfarer.UI.Controls
     #endif
     public class OrganizableContainer : WayfarerControl
     {
-        [Export(PropertyHint.Enum, "Horizontal, Vertical")] private OrganizingMode _organizingMode = OrganizingMode.Horizontal;
-        [Export(PropertyHint.Enum, "Right, Left")] private SortDirection _sortDirection = SortDirection.Right;
-        [Export(PropertyHint.Enum, "End, Middle, Start")] private SwitchThreshold _switchThreshold = SwitchThreshold.Middle;
-        [Export()] private bool _regularSizeChildren = false;
-        [Export()] private float _regularSize = float.MaxValue;
-        [Export()] private bool _isMouseOver = false;
-        [Export()] private OrganizableItem _draggedChild;
-        [Export()] private bool _hasNonOrganizableChildren = false;
-        [Export()] private float _sortAnimDuration = 0.4f;
-        [Export()] private float _separation = 5f;
-        [Export()] private float _sortPrecision = 0.5f;
-        [Export()] private float _axisAnchor = float.MaxValue;
-        [Export()] private bool _changed = false;
-        [Export()] private bool _lowPerformance = false;
+        private OrganizingMode _organizingMode = OrganizingMode.Horizontal;
+        private SortDirection _sortDirection = SortDirection.Right;
+        private SwitchThreshold _switchThreshold = SwitchThreshold.Middle;
+        private bool _regularSizeChildren = false;
+        private bool _lowPerformance = false;
+        private float _sortAnimDuration = 0.4f;
+        private float _separation = 5f;
+        private float _sortPrecision = 0.5f;
+        
+        private float _regularSize = float.MaxValue;
+        private bool _isMouseOver = false;
+        private OrganizableItem _draggedChild;
+        private bool _hasNonOrganizableChildren = false;
+        private float _axisAnchor = float.MaxValue;
+        private bool _changed = false;
+        
         
 
         public OrganizingMode OrganizingMode => _organizingMode;
         public SortDirection SortDirection => _sortDirection;
         public SwitchThreshold SwitchThreshold => _switchThreshold;
         public bool RegularSizeChildren => _regularSizeChildren;
+        public bool LowPerformance => _lowPerformance;
+        public float SortAnimDuration => _sortAnimDuration;
+        public float Separation => _separation;
+        public float SortPrecision => _sortPrecision;
+        
         public float RegularSize => _regularSize;
         public bool IsMouseOver => _isMouseOver;
         public OrganizableItem DraggedChild => _draggedChild;
         public bool HasNonOrganizableChildren => _hasNonOrganizableChildren;
-        public int CurrHoveredIndex => GetCurrHoveredIndex();
-        public float SortAnimDuration => _sortAnimDuration;
-        public float Separation => _separation;
-        public float SortPrecision => _sortPrecision;
         public float AxisAnchor => _axisAnchor;
         public bool Changed => _changed;
-        public bool LowPerformance => _lowPerformance;
+        
+        public int CurrHoveredIndex => GetCurrHoveredIndex();
         
         public override void _ReadySafe()
         {
@@ -53,10 +60,12 @@ namespace Wayfarer.UI.Controls
             try
             {
                 Connections.Add(MouseManager, nameof(MouseManager.StoppedDragging), this, nameof(OnGlobalDragStopped));
+                Connections.Add(MouseManager, nameof(MouseManager.StartedDragging), this, nameof(OnGlobalDragStarted));
             }
             catch (Exception e)
             {
                 Connections.Add(GetMouseManager, nameof(MouseManager.StoppedDragging), this, nameof(OnGlobalDragStopped));
+                Connections.Add(GetMouseManager, nameof(MouseManager.StartedDragging), this, nameof(OnGlobalDragStarted));
             }
 
             if (GetChildCount() > 0 && Math.Abs(_axisAnchor - float.MaxValue) < SortPrecision)
@@ -88,6 +97,141 @@ namespace Wayfarer.UI.Controls
             return "";
         }
 
+        public override Array _GetPropertyList()
+        {
+            Array list = new Array();
+
+            Dictionary header = new Dictionary
+            {
+                {"name", "OrganizableContainer"},
+                {"type", Variant.Type.Nil},
+                {"usage", PropertyUsageFlags.Category}
+            };
+            list.Add(header);
+            
+            Dictionary orgMode = new Dictionary
+            {
+                {"name", "layout/organizing_mode"},
+                {"type", Variant.Type.Int},
+                {"hint", PropertyHint.Enum},
+                {"hint_string", "Horizontal, Vertical"},
+            };
+            list.Add(orgMode);
+            
+            Dictionary sortDir = new Dictionary
+            {
+                {"name", "behaviour/sort_direction"},
+                {"type", Variant.Type.Int},
+                {"hint", PropertyHint.Enum},
+                {"hint_string", "Right, Left"},
+            };
+            list.Add(sortDir);
+            
+            Dictionary switchThreshold = new Dictionary
+            {
+                {"name", "behaviour/switch_threshold"},
+                {"type", Variant.Type.Int},
+                {"hint", PropertyHint.Enum},
+                {"hint_string", "End, Middle, Start"},
+            };
+            list.Add(switchThreshold);
+            
+            Dictionary separation = new Dictionary
+            {
+                {"name", "layout/separation"},
+                {"type", Variant.Type.Real},
+            };
+            list.Add(separation);
+            
+            Dictionary precision = new Dictionary
+            {
+                {"name", "behaviour/sort_precision"},
+                {"type", Variant.Type.Real},
+            };
+            list.Add(precision);
+            
+            Dictionary sortAnimDur = new Dictionary
+            {
+                {"name", "behaviour/sort_animation_duration"},
+                {"type", Variant.Type.Real},
+            };
+            list.Add(sortAnimDur);
+            
+            Dictionary regChildren = new Dictionary
+            {
+                {"name", "optimizations/regular_sized_children"},
+                {"type", Variant.Type.Bool},
+            };
+            list.Add(regChildren);
+            
+            Dictionary lowPerf = new Dictionary
+            {
+                {"name", "optimizations/low_performance_mode"},
+                {"type", Variant.Type.Bool},
+            };
+            list.Add(lowPerf);
+
+            return list;
+        }
+
+        public override object _Get(string property)
+        {
+            switch (property)
+            {
+                case "layout/organizing_mode":
+                    return OrganizingMode;
+                case "behaviour/sort_direction":
+                    return SortDirection;
+                case "behaviour/switch_threshold":
+                    return SwitchThreshold;
+                case "layout/separation":
+                    return Separation;
+                case "behaviour/sort_precision":
+                    return SortPrecision;
+                case "behaviour/sort_animation_duration":
+                    return SortAnimDuration;
+                case "optimizations/regular_sized_children":
+                    return RegularSizeChildren;
+                case "optimizations/low_performance_mode":
+                    return LowPerformance;
+            }
+            
+            return base._Get(property);
+        }
+
+        public override bool _Set(string property, object value)
+        {
+            switch (property)
+            {
+                case "layout/organizing_mode":
+                    _organizingMode = (OrganizingMode) value;
+                    break;
+                case "behaviour/sort_direction":
+                    _sortDirection = (SortDirection) value;
+                    break;
+                case "behaviour/switch_threshold":
+                    _switchThreshold = (SwitchThreshold) value;
+                    break;
+                case "layout/separation":
+                    _separation = (float) value;
+                    break;
+                case "behaviour/sort_precision":
+                    _sortPrecision = (float) value;
+                    break;
+                case "behaviour/sort_animation_duration":
+                    _sortAnimDuration = (float) value;
+                    break;
+                case "optimizations/regular_sized_children":
+                    _regularSizeChildren = (bool) value;
+                    break;
+                case "optimizations/low_performance_mode":
+                    _lowPerformance = (bool) value;
+                    break;
+            }
+            
+            return base._Set(property, value);
+        }
+
         public override void _ProcessSafe(float delta)
         {
             #if TOOLS
@@ -100,9 +244,10 @@ namespace Wayfarer.UI.Controls
             if (DraggedChild != null)
             {
                 int hover = GetCurrHoveredIndex();
-                if (DraggedChild.GetIndex() != hover)
+                if (DraggedChild.GetIndex() != hover && hover > -1 && hover < GetChildCount())
                 {
                     MoveChild(DraggedChild, hover);
+                    _changed = true;
                 }
             }
             
@@ -144,29 +289,29 @@ namespace Wayfarer.UI.Controls
                     {
                         if (node is OrganizableItem item)
                         {
-                            if (DraggedChild == null && item.IsDragged)
+                            if (item.IsDragged)
                             {
                                 _draggedChild = item;
                             }
                             
                             if (SortDirection == SortDirection.Right)
                             {
-                                float itemCenterX = GetItemXPosByIndex(item.GetIndex());
+                                float thresholdX = GetItemXPosByIndex(item.GetIndex());
 
                                 switch (SwitchThreshold)
                                 {
                                     case SwitchThreshold.End:
-                                        itemCenterX += (item.RectSize.x * 1f);
+                                        thresholdX += (item.RectSize.x * 1f);
                                         break;
                                     case SwitchThreshold.Middle:
-                                        itemCenterX += (item.RectSize.x * 1f) + (Separation / 2);
+                                        thresholdX += (item.RectSize.x * 1f) + (Separation / 2);
                                         break;
                                     case SwitchThreshold.Start:
-                                        itemCenterX += (item.RectSize.x * 1f) + Separation;
+                                        thresholdX += (item.RectSize.x * 1f) + Separation;
                                         break;
                                 }
                                 
-                                if (GetLocalMousePosition().x > itemCenterX)
+                                if (GetLocalMousePosition().x > thresholdX)
                                 {
                                     continue;
                                 }
@@ -175,21 +320,21 @@ namespace Wayfarer.UI.Controls
                             }
                             else if (SortDirection == SortDirection.Left)
                             {
-                                float itemCenterX = GetItemXPosByIndex(item.GetIndex());
+                                float thresholdX = GetItemXPosByIndex(item.GetIndex());
 
                                 switch (SwitchThreshold)
                                 {
                                     case SwitchThreshold.End:
                                         break;
                                     case SwitchThreshold.Middle:
-                                        itemCenterX -= (Separation / 2);
+                                        thresholdX -= (Separation / 2);
                                         break;
                                     case SwitchThreshold.Start:
-                                        itemCenterX -= Separation;
+                                        thresholdX -= Separation;
                                         break;
                                 }
                                 
-                                if (GetLocalMousePosition().x < itemCenterX)
+                                if (GetLocalMousePosition().x < thresholdX)
                                 {
                                     continue;
                                 }
@@ -216,49 +361,7 @@ namespace Wayfarer.UI.Controls
                 {
                     if (node is OrganizableItem item && !item.IsDragged)
                     {
-                        if (item.Tween == null)
-                        {
-                            item.CreateTween();
-                        }
-                        
-                        if (SortDirection == SortDirection.Right)
-                        {
-                            if (LowPerformance && item.Tween.IsActive())
-                            {
-                                continue;
-                            }
-                            
-                            if (Math.Abs(item.RectPosition.x - GetItemXPosByIndex(item.GetIndex())) > SortPrecision)
-                            {
-                                Vector2 newPos = new Vector2(GetItemXPosByIndex(item.GetIndex()), AxisAnchor);
-                                
-                                item.Tween.Stop(item, "rect_position");
-                                
-                                item.Tween.InterpolateProperty(item, "rect_position", item.RectPosition, newPos,
-                                    SortAnimDuration, Tween.TransitionType.Cubic, Tween.EaseType.Out);
-                                
-                                item.Tween.Start();
-                            }
-                        }
-                        else if (SortDirection == SortDirection.Left)
-                        {
-                            if (LowPerformance && item.Tween.IsActive())
-                            {
-                                continue;
-                            }
-                            
-                            if (Math.Abs(item.RectPosition.x - GetItemXPosByIndex(item.GetIndex())) > SortPrecision)
-                            {
-                                Vector2 newPos = new Vector2(GetItemXPosByIndex(item.GetIndex()), AxisAnchor);
-                                
-                                item.Tween.Stop(item, "rect_position");
-                                
-                                item.Tween.InterpolateProperty(item, "rect_position", item.RectPosition, newPos,
-                                    SortAnimDuration, Tween.TransitionType.Cubic, Tween.EaseType.Out);
-                                
-                                item.Tween.Start();
-                            }
-                        }
+                        SortX(item);
                     }
                 }
             }
@@ -279,6 +382,11 @@ namespace Wayfarer.UI.Controls
                 if (item.Tween == null)
                 {
                     item.CreateTween();
+                }
+                
+                if (LowPerformance && item.Tween.IsActive())
+                {
+                    return;
                 }
                         
                 if (SortDirection == SortDirection.Right)
@@ -381,7 +489,6 @@ namespace Wayfarer.UI.Controls
                         else
                         {
                             _draggedChild = node as OrganizableItem;
-                            _changed = true;
                             return false;
                         }
                     }
@@ -442,7 +549,6 @@ namespace Wayfarer.UI.Controls
                         else
                         {
                             _draggedChild = node as OrganizableItem;
-                            _changed = true;
                             return false;
                         }
                     }
@@ -474,6 +580,23 @@ namespace Wayfarer.UI.Controls
                     {
                         item.SetIsDragged(false);
                         MoveChild(item, CurrHoveredIndex);
+                        return;
+                    }
+                }
+            }
+        }
+
+        private void OnGlobalDragStarted(Node node)
+        {
+            if (node is OrganizableItem item)
+            {
+                foreach (Node child in GetChildren())
+                {
+                    if (item == child)
+                    {
+                        item.SetIsDragged(true);
+                        _draggedChild = item;
+                        return;
                     }
                 }
             }
@@ -506,8 +629,9 @@ namespace Wayfarer.UI.Controls
     
     public enum OrganizingMode
     {
-        Vertical,
-        Horizontal
+        
+        Horizontal,
+        Vertical
     }
 
     public enum SortDirection

@@ -12,16 +12,13 @@ namespace Wayfarer.UI.Controls
 {
     public class WayfarerControl : Control, ISignalConnectionHandled
     {
-
-        [Export()] private string _nameOfRoot;
-        
         private SignalConnectionHandler _connections = new SignalConnectionHandler();
         private MouseManager _mouseManager;
-        private bool _cachedHasTabContainerParent = false;
+        private bool _cachedIsEditedScene = false;
         
         public SignalConnectionHandler Connections => _connections;
         public MouseManager MouseManager => GetMouseManager();
-        public bool CachedHasTabContainerParent => _cachedHasTabContainerParent;
+        public bool CachedIsEditedScene => _cachedIsEditedScene;
         
         #if TOOLS
         public bool ResetOnReady => WayfarerProjectSettings.ResetOnReady;
@@ -36,14 +33,14 @@ namespace Wayfarer.UI.Controls
             if (_cachedResetOnReady) return;
             #endif
 
-            if (HasATabContainerParent())
+            if (IsEditedScene())
             {
-                _cachedHasTabContainerParent = true;
+                _cachedIsEditedScene = true;
                 return;
             }
             else
             {
-                _cachedHasTabContainerParent = false;
+                _cachedIsEditedScene = false;
             }
             
             base._EnterTree();
@@ -56,7 +53,7 @@ namespace Wayfarer.UI.Controls
             if (_cachedResetOnReady) return;
             #endif
             
-            if (CachedHasTabContainerParent)
+            if (CachedIsEditedScene)
             {
                 return;
             }
@@ -74,7 +71,7 @@ namespace Wayfarer.UI.Controls
             if (_cachedResetOnReady) return;
             #endif
             
-            if (CachedHasTabContainerParent)
+            if (CachedIsEditedScene)
             {
                 return;
             }
@@ -90,7 +87,7 @@ namespace Wayfarer.UI.Controls
             if (_cachedResetOnReady) return;
             #endif    
             
-            if (CachedHasTabContainerParent)
+            if (CachedIsEditedScene)
             {
                 return;
             }
@@ -126,11 +123,15 @@ namespace Wayfarer.UI.Controls
             
         }
 
-        private bool HasATabContainerParent()
+        private bool IsEditedScene()
         {
-            if (this.GetParentOfType<TabContainer>() != null)
+            TabContainer tab = this.GetParentOfType<TabContainer>();
+            if (tab != null)
             {
-                return true;
+                foreach (Node child in tab.GetChildren())
+                {
+                    if (child.Name == "Scene") return true;
+                }
             }
 
             return false;
