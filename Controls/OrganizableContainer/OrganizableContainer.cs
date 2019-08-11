@@ -36,6 +36,7 @@ namespace Wayfarer.UI.Controls
         private bool _hasNonOrganizableChildren = false;
         private float _axisAnchor = -1;
         private bool _changed = false;
+        private Tween _tween;
         
         
 
@@ -59,11 +60,17 @@ namespace Wayfarer.UI.Controls
         public bool HasNonOrganizableChildren => _hasNonOrganizableChildren;
         public float AxisAnchor => _axisAnchor;
         public bool Changed => _changed;
+        public Tween Tween => _tween;
         
         public int CurrHoveredIndex => GetCurrHoveredIndex();
         
         public override void _ReadySafe()
         {
+            if (_tween == null)
+            {
+                _tween = new Tween();
+                GetParent().CallDeferred("add_child", _tween);
+            }
             Connect("mouse_entered", this, nameof(OnMouseEntered));
             Connect("mouse_exited", this, nameof(OnMouseExited));
             
@@ -314,7 +321,7 @@ namespace Wayfarer.UI.Controls
             {
                 if (node is OrganizableItem item)
                 {
-                    if (GetChildCount() > 0 && (Math.Abs(_axisAnchor - -1) < SortPrecision || Math.Abs(_regularSize - -1) < SortPrecision) || (AxisAnchor > 999) )
+                    if (GetChildCount() > 0 && (Math.Abs(_axisAnchor - -1) < SortPrecision || Math.Abs(_regularSize - -1) < SortPrecision) || (Math.Abs(AxisAnchor - float.MaxValue) < 100f) )
                     {
                         Control child = GetChild<Control>(0);
                 
@@ -363,7 +370,14 @@ namespace Wayfarer.UI.Controls
                 SortAll();
             }
         }
-        
+
+        public override void _ExitTreeSafe()
+        {
+            _tween.StopAll();
+            _tween.QueueFree();
+            _tween = null;
+        }
+
         public override void _Input(InputEvent @event)
         {
             if (@event is InputEventMouseButton)
@@ -461,7 +475,7 @@ namespace Wayfarer.UI.Controls
             {
                 foreach (Node node in GetChildren())
                 {
-                    if (node is OrganizableItem item && !item.IsDragged)
+                    if (node is OrganizableItem item && (!item.IsDragged))
                     {
                         SortHorizontal(item);
                     }
@@ -481,11 +495,6 @@ namespace Wayfarer.UI.Controls
         {
             if (OrganizingMode == OrganizingMode.Horizontal)
             {
-                if (item.Tween == null)
-                {
-                    item.CreateTween();
-                }
-                     
                 if (SortDirection == SortDirection.Right)
                 {
                     if (Math.Abs(item.RectPosition.x - GetItemXPosByIndex(item.GetIndex())) > SortPrecision || Math.Abs(item.RectPosition.y - AxisAnchor) > SortPrecision)
@@ -494,15 +503,15 @@ namespace Wayfarer.UI.Controls
                                 
                         if (!LowPerformance)
                         {
-                            item.Tween.Stop(item, "rect_position");
+                            _tween.Stop(item, "rect_position");
                         }
-                            
-                        item.Tween.InterpolateProperty(item, "rect_position", item.RectPosition, newPos,
+                        
+                        _tween.InterpolateProperty(item, "rect_position", item.RectPosition, newPos,
                             SortAnimDuration, Tween.TransitionType.Cubic, Tween.EaseType.Out);
                                 
-                        if (!LowPerformance || !item.Tween.IsActive())
+                        if (!_tween.IsActive())
                         {
-                            item.Tween.Start();
+                            _tween.Start();
                         }
                     }
                 }
@@ -514,15 +523,14 @@ namespace Wayfarer.UI.Controls
                                 
                         if (!LowPerformance)
                         {
-                            item.Tween.Stop(item, "rect_position");
+                            _tween.Stop(item, "rect_position");
                         }
-                                
-                        item.Tween.InterpolateProperty(item, "rect_position", item.RectPosition, newPos,
+                        _tween.InterpolateProperty(item, "rect_position", item.RectPosition, newPos,
                             SortAnimDuration, Tween.TransitionType.Cubic, Tween.EaseType.Out);
                                 
-                        if (!LowPerformance || !item.Tween.IsActive())
+                        if (!_tween.IsActive())
                         {
-                            item.Tween.Start();
+                            _tween.Start();
                         }
                     }
                 }
@@ -539,7 +547,6 @@ namespace Wayfarer.UI.Controls
                 }
                 else if (SortDirection == SortDirection.Left)
                 {
-                    //float maxX = GetChildCount() * (RegularSize + Separation);
                     float maxX = RectSize.x - RegularSize;
                     
                     return maxX - (idx * (RegularSize + Separation));
@@ -704,6 +711,7 @@ namespace Wayfarer.UI.Controls
                     if (item == child)
                     {
                         item.SetIsDragged(true);
+                        _tween.Stop(item, "rect_position");
                         _draggedChild = item;
                         return;
                     }

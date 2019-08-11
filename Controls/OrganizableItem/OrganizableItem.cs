@@ -13,17 +13,15 @@ namespace Wayfarer.UI.Controls
     #endif
     public class OrganizableItem : WayfarerControl, IDraggableControl
     {
-        private Tween _tween;
         private bool _mouseOver = false;
         private bool _isDragged = false;
 
-        public Tween Tween => _tween;
         public bool MouseOver => _mouseOver;
         public bool IsDragged => _isDragged;
 
         public override void _EnterTreeSafe()
         {
-            CreateTween();
+            
         }
         
         public override void _PreReadySafe()
@@ -61,12 +59,11 @@ namespace Wayfarer.UI.Controls
 
         public override void _ExitTreeSafe()
         {
-            _tween = null;
+            
         }
         
         public void StartDrag()
         {
-            Tween.StopAll();
             _isDragged = true;
             MouseManager.StartDragging(this, GetLocalMousePosition());
         }
@@ -77,23 +74,6 @@ namespace Wayfarer.UI.Controls
             {
                 _isDragged = false;
             }
-        }
-
-        public void CreateTween()
-        {
-            foreach (Node node in GetChildren())
-            {
-                if (node is Tween currTween)
-                {
-                    currTween.StopAll();
-                    currTween.Name = "BeingFreed";
-                    currTween.QueueFree();
-                }
-            }
-            
-            _tween = new Tween { Name = "Tween" };
-            
-            AddChild(_tween);
         }
 
         public void SetIsDragged(bool value)
