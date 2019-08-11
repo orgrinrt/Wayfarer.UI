@@ -74,7 +74,7 @@ namespace Wayfarer.UI.Controls
             #if TOOLS
             if (_cachedResetOnReady) return;
             #endif
-            
+
             base._Process(delta);
             Connections?.Update();
             _ProcessSafe(delta);
