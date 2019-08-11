@@ -15,6 +15,7 @@ namespace Wayfarer.UI.Controls
         private SignalConnectionHandler _connections = new SignalConnectionHandler();
         private MouseManager _mouseManager;
         private bool _cachedIsEditedScene = false;
+        private int _cachedChildCount = 0;
         
         public SignalConnectionHandler Connections => _connections;
         public MouseManager MouseManager => GetMouseManager();
@@ -52,6 +53,8 @@ namespace Wayfarer.UI.Controls
             #if TOOLS
             if (_cachedResetOnReady) return;
             #endif
+
+            _cachedChildCount = GetChildCount();
             
             if (CachedIsEditedScene)
             {
@@ -62,6 +65,7 @@ namespace Wayfarer.UI.Controls
             this.SetupWayfarer();
 
             _PreReadySafe();
+            Connections?.Update();
             _ReadySafe();
         }
 
@@ -70,11 +74,6 @@ namespace Wayfarer.UI.Controls
             #if TOOLS
             if (_cachedResetOnReady) return;
             #endif
-            
-            if (CachedIsEditedScene)
-            {
-                return;
-            }
             
             base._Process(delta);
             Connections?.Update();
@@ -98,6 +97,18 @@ namespace Wayfarer.UI.Controls
             _connections = null;
         }
 
+        public override object _Get(string property)
+        {
+            _UpdatePreview();
+            return base._Get(property);
+        }
+        
+        public override bool _Set(string property, object value)
+        {
+            _UpdatePreview();
+            return base._Set(property, value);
+        }
+
         public virtual void _EnterTreeSafe()
         {
             
@@ -110,7 +121,12 @@ namespace Wayfarer.UI.Controls
 
         public virtual void _PreReadySafe()
         {
-            Connections.Update();
+            
+        }
+
+        public virtual void _UpdatePreview()
+        {
+            
         }
 
         public virtual void _ProcessSafe(float delta)

@@ -30,11 +30,11 @@ namespace Wayfarer.UI.Controls
         private float _separation = 5f;
         private float _sortPrecision = 0.5f;
         
-        private float _regularSize = float.MaxValue;
+        private float _regularSize = -1;
         private bool _isMouseOver = false;
         private OrganizableItem _draggedChild;
         private bool _hasNonOrganizableChildren = false;
-        private float _axisAnchor = float.MaxValue;
+        private float _axisAnchor = -1;
         private bool _changed = false;
         
         
@@ -78,7 +78,7 @@ namespace Wayfarer.UI.Controls
                 Connections.Add(GetMouseManager, nameof(MouseManager.StartedDragging), this, nameof(OnGlobalDragStarted));
             }
 
-            if (GetChildCount() > 0 && Math.Abs(_axisAnchor - float.MaxValue) < SortPrecision)
+            if (GetChildCount() > 0 && (Math.Abs(_axisAnchor - -1) < SortPrecision || Math.Abs(_regularSize - -1) < SortPrecision))
             {
                 Control child = GetChild<Control>(0);
                 
@@ -229,9 +229,9 @@ namespace Wayfarer.UI.Controls
             {
                 case "layout/organizing_mode":
                     return OrganizingMode;
-                case "dropping//allow_dropping":
+                case "dropping/allow_dropping":
                     return AllowDroppingFromOtherContainers;
-                case "dropping//accepted_groups":
+                case "dropping/accepted_groups":
                     return AcceptedGroups;
                 case "layout/sort_direction":
                     return SortDirection;
@@ -260,61 +260,88 @@ namespace Wayfarer.UI.Controls
 
         public override bool _Set(string property, object value)
         {
+            _UpdatePreview();
+            
             switch (property)
             {
                 case "layout/organizing_mode":
                     _organizingMode = (OrganizingMode) value;
-                    break;
-                case "dropping//allow_dropping":
+                    return true;
+                case "dropping/allow_dropping":
                     _allowDroppingFromOtherContainers = (bool) value;
-                    break;
-                case "dropping//accepted_groups":
+                    return true;
+                case "dropping/accepted_groups":
                     _acceptedGroups = (Array) value;
-                    break;
+                    return true;
                 case "layout/sort_direction":
                     _sortDirection = (SortDirection) value;
-                    break;
+                    return true;
                 case "behaviour/switch_threshold":
                     _switchThreshold = (SwitchThreshold) value;
-                    break;
+                    return true;
                 case "layout/separation":
                     _separation = (float) value;
-                    break;
+                    return true;
                 case "layout/horizontal_alignment":
                     _horizontalAlignment = (HorizontalAlignment) value;
-                    break;
+                    return true;
                 case "layout/vertical_alignment":
                     _verticalAlignment = (VerticalAlignment) value;
-                    break;
+                    return true;
                 case "behaviour/sort_precision":
                     _sortPrecision = (float) value;
-                    break;
+                    return true;
                 case "behaviour/sort_animation_duration":
                     _sortAnimDuration = (float) value;
-                    break;
+                    return true;
                 case "optimizations/regular_sized_children":
                     _regularSizeChildren = (bool) value;
-                    break;
+                    return true;
                 case "optimizations/low_performance_mode":
                     _lowPerformance = (bool) value;
-                    break;
+                    return true;
                 case "optimizations/disable_shifting":
                     _noShifting = (bool) value;
-                    break;
+                    return true;
             }
             
             return base._Set(property, value);
         }
 
+        public override void _UpdatePreview()
+        {
+            foreach (Node node in GetChildren())
+            {
+                if (node is OrganizableItem item)
+                {
+                    if (GetChildCount() > 0 && (Math.Abs(_axisAnchor - -1) < SortPrecision || Math.Abs(_regularSize - -1) < SortPrecision) || (AxisAnchor > 999) )
+                    {
+                        Control child = GetChild<Control>(0);
+                
+                        if (OrganizingMode == OrganizingMode.Horizontal)
+                        {
+                            _axisAnchor = child.RectPosition.y;
+                            _regularSize = child.RectSize.x;
+                        }
+                        else if (OrganizingMode == OrganizingMode.Vertical)
+                        {
+                            _axisAnchor = child.RectPosition.x;
+                            _regularSize = child.RectSize.y;
+                        }
+                    }
+                    
+                    item.RectPosition = new Vector2(GetItemXPosByIndex(item.GetIndex()), AxisAnchor);
+                    continue;
+                }
+                _hasNonOrganizableChildren = true;
+                return;
+            }
+
+            _hasNonOrganizableChildren = false;
+        }
+
         public override void _ProcessSafe(float delta)
         {
-            #if TOOLS
-            if (HasNonOrganizableChildren)
-            {
-                _hasNonOrganizableChildren = false;
-            }
-            #endif
-            
             if (DraggedChild != null && !NoShifting)
             {
                 int hover = GetCurrHoveredIndex();
@@ -327,6 +354,7 @@ namespace Wayfarer.UI.Controls
             
             if (Changed)
             {
+                _hasNonOrganizableChildren = false;
                 if (IsSortDone())
                 {
                     _changed = false;
@@ -335,7 +363,7 @@ namespace Wayfarer.UI.Controls
                 SortAll();
             }
         }
-
+        
         public override void _Input(InputEvent @event)
         {
             if (@event is InputEventMouseButton)
