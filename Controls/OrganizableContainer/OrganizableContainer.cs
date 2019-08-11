@@ -227,6 +227,13 @@ namespace Wayfarer.UI.Controls
                 {"type", Variant.Type.Bool},
             };
             list.Add(noShift);
+            
+            Dictionary sepOnEnds = new Dictionary
+            {
+                {"name", "layout/separation_on_ends"},
+                {"type", Variant.Type.Bool},
+            };
+            list.Add(sepOnEnds);
 
             return list;
         }
@@ -261,6 +268,8 @@ namespace Wayfarer.UI.Controls
                     return LowPerformance;
                 case "optimizations/disable_shifting":
                     return NoShifting;
+                case "layout/separation_on_ends":
+                    return SeparationOnEnds;
             }
             
             return base._Get(property);
@@ -274,6 +283,7 @@ namespace Wayfarer.UI.Controls
             {
                 case "layout/organizing_mode":
                     _organizingMode = (OrganizingMode) value;
+                    _UpdatePreview();
                     return true;
                 case "dropping/allow_dropping":
                     _allowDroppingFromOtherContainers = (bool) value;
@@ -290,12 +300,15 @@ namespace Wayfarer.UI.Controls
                     return true;
                 case "layout/separation":
                     _separation = (float) value;
+                    _UpdatePreview();
                     return true;
                 case "layout/horizontal_alignment":
                     _horizontalAlignment = (HorizontalAlignment) value;
+                    _UpdatePreview();
                     return true;
                 case "layout/vertical_alignment":
                     _verticalAlignment = (VerticalAlignment) value;
+                    _UpdatePreview();
                     return true;
                 case "behaviour/sort_precision":
                     _sortPrecision = (float) value;
@@ -305,12 +318,17 @@ namespace Wayfarer.UI.Controls
                     return true;
                 case "optimizations/regular_sized_children":
                     _regularSizeChildren = (bool) value;
+                    _UpdatePreview();
                     return true;
                 case "optimizations/low_performance_mode":
                     _lowPerformance = (bool) value;
                     return true;
                 case "optimizations/disable_shifting":
                     _noShifting = (bool) value;
+                    return true;
+                case "layout/separation_on_ends":
+                    _separationOnEnds = (bool) value;
+                    _UpdatePreview();
                     return true;
             }
             
