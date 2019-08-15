@@ -17,7 +17,7 @@ namespace Wayfarer.UI.Controls
     public class OrganizableContainer : WayfarerControl
     {
         private OrganizingMode _organizingMode = OrganizingMode.Horizontal;
-        private SortDirection _sortDirection = SortDirection.Right;
+        private SortDirection _sortDirection = SortDirection.Forward;
         private SwitchThreshold _switchThreshold = SwitchThreshold.Middle;
         private HorizontalAlignment _horizontalAlignment = HorizontalAlignment.Left;
         private VerticalAlignment _verticalAlignment = VerticalAlignment.Top;
@@ -30,11 +30,11 @@ namespace Wayfarer.UI.Controls
         private float _separation = 5f;
         private float _sortPrecision = 0.5f;
         private bool _separationOnEnds = false;
+        private bool _wrap = true;
         
-        private float _regularSize = -1;
+        private Vector2 _regularSize = Vector2.Zero;
         private bool _isMouseOver = false;
         private OrganizableItem _draggedChild;
-        private float _axisAnchor = -1;
         private bool _changed = false;
         private Tween _tween;
         
@@ -54,12 +54,12 @@ namespace Wayfarer.UI.Controls
         public float Separation => _separation;
         public float SortPrecision => _sortPrecision;
         public bool SeparationOnEnds => _separationOnEnds;
+        public bool Wrap => _wrap;
         
-        public float RegularSize => _regularSize;
+        public Vector2 RegularSize => _regularSize;
         public bool IsMouseOver => _isMouseOver;
         public OrganizableItem DraggedChild => _draggedChild;
         public bool HasNonOrganizableChildren => CheckForOrganizableChildren();
-        public float AxisAnchor => _axisAnchor;
         public bool Changed => _changed;
         public Tween Tween => _tween;
         
@@ -86,20 +86,10 @@ namespace Wayfarer.UI.Controls
                 Connections.Add(GetMouseManager, nameof(MouseManager.StartedDragging), this, nameof(OnGlobalDragStarted));
             }
 
-            if (GetChildCount() > 0 && (Math.Abs(_axisAnchor - -1) < SortPrecision || Math.Abs(_regularSize - -1) < SortPrecision))
+            if (GetChildCount() > 0 && RegularSize <= Vector2.Zero)
             {
                 Control child = GetChild<Control>(0);
-                
-                if (OrganizingMode == OrganizingMode.Horizontal)
-                {
-                    _axisAnchor = child.RectPosition.y;
-                    _regularSize = child.RectSize.x;
-                }
-                else if (OrganizingMode == OrganizingMode.Vertical)
-                {
-                    _axisAnchor = child.RectPosition.x;
-                    _regularSize = child.RectSize.y;
-                }
+                _regularSize = child.RectSize;
             }
         }
 
@@ -173,7 +163,7 @@ namespace Wayfarer.UI.Controls
                 {"name", "layout/sort_direction"},
                 {"type", Variant.Type.Int},
                 {"hint", PropertyHint.Enum},
-                {"hint_string", "Right, Left"},
+                {"hint_string", "Forward, Backward"},
             };
             list.Add(sortDir);
             
@@ -234,6 +224,13 @@ namespace Wayfarer.UI.Controls
                 {"type", Variant.Type.Bool},
             };
             list.Add(sepOnEnds);
+            
+            Dictionary wrap = new Dictionary
+            {
+                {"name", "layout/wrap"},
+                {"type", Variant.Type.Bool},
+            };
+            list.Add(wrap);
 
             return list;
         }
@@ -270,6 +267,8 @@ namespace Wayfarer.UI.Controls
                     return NoShifting;
                 case "layout/separation_on_ends":
                     return SeparationOnEnds;
+                case "layout/wrap":
+                    return Wrap;
             }
             
             return base._Get(property);
@@ -330,6 +329,10 @@ namespace Wayfarer.UI.Controls
                     _separationOnEnds = (bool) value;
                     _UpdatePreview();
                     return true;
+                case "layout/wrap":
+                    _wrap = (bool) value;
+                    _UpdatePreview();
+                    return true;
             }
             
             return base._Set(property, value);
@@ -337,27 +340,7 @@ namespace Wayfarer.UI.Controls
 
         public override void _UpdatePreview()
         {
-            foreach (Node node in GetChildren())
-            {
-                if (node is OrganizableItem item)
-                {
-                    if (GetChildCount() > 0 && (Math.Abs(_axisAnchor - -1) < SortPrecision || Math.Abs(_regularSize - -1) < SortPrecision) || (Math.Abs(AxisAnchor - float.MaxValue) < 100f) )
-                    {
-                        Control child = GetChild<Control>(0);
-                
-                        if (OrganizingMode == OrganizingMode.Horizontal)
-                        {
-                            _axisAnchor = child.RectPosition.y;
-                            _regularSize = child.RectSize.x;
-                        }
-                        else if (OrganizingMode == OrganizingMode.Vertical)
-                        {
-                            _axisAnchor = child.RectPosition.x;
-                            _regularSize = child.RectSize.y;
-                        }
-                    }
-                }
-            }
+            SetRegularSizedChildren(_regularSizeChildren);
         }
 
         public override void _ProcessSafe(float delta)
@@ -400,6 +383,8 @@ namespace Wayfarer.UI.Controls
 
         public int GetCurrHoveredIndex()
         {
+            Vector2 mousePos = GetLocalMousePosition();
+            
             if (OrganizingMode == OrganizingMode.Horizontal)
             {
                 if (!IsMouseOver)
@@ -421,8 +406,10 @@ namespace Wayfarer.UI.Controls
                             {
                                 _draggedChild = item;
                             }
+
+                            float thresholdY = GetItemYPosByIndex(item.GetIndex());
                             
-                            if (SortDirection == SortDirection.Right)
+                            if (SortDirection == SortDirection.Forward)
                             {
                                 float thresholdX = GetItemXPosByIndex(item.GetIndex());
 
@@ -438,15 +425,18 @@ namespace Wayfarer.UI.Controls
                                         thresholdX += (item.RectSize.x * 1f) + Separation;
                                         break;
                                 }
-                                
-                                if (GetLocalMousePosition().x > thresholdX)
+
+                                if (mousePos.x > thresholdX)
                                 {
                                     continue;
                                 }
-                                
-                                return item.GetIndex();
+
+                                if (mousePos.y > thresholdY && mousePos.y < (thresholdY + item.RectSize.y + Separation))
+                                {
+                                    return item.GetIndex();
+                                }
                             }
-                            else if (SortDirection == SortDirection.Left)
+                            else if (SortDirection == SortDirection.Backward)
                             {
                                 float thresholdX = GetItemXPosByIndex(item.GetIndex());
 
@@ -467,7 +457,10 @@ namespace Wayfarer.UI.Controls
                                     continue;
                                 }
                                 
-                                return item.GetIndex();
+                                if (mousePos.y > thresholdY && mousePos.y < (thresholdY + item.RectSize.y))
+                                {
+                                    return item.GetIndex();
+                                }
                             }
                         }
                     }
@@ -485,29 +478,7 @@ namespace Wayfarer.UI.Controls
                 {
                     if (node is OrganizableItem item && (!item.IsDragged))
                     {
-                        SortHorizontal(item);
-                    }
-                }
-            }
-        }
-
-        private void SortY(OrganizableItem item)
-        {
-            if (OrganizingMode == OrganizingMode.Horizontal)
-            {
-                
-            }
-        }
-
-        private void SortHorizontal(OrganizableItem item)
-        {
-            if (OrganizingMode == OrganizingMode.Horizontal)
-            {
-                if (SortDirection == SortDirection.Right)
-                {
-                    if (Math.Abs(item.RectPosition.x - GetItemXPosByIndex(item.GetIndex())) > SortPrecision || Math.Abs(item.RectPosition.y - AxisAnchor) > SortPrecision)
-                    {
-                        Vector2 newPos = new Vector2(GetItemXPosByIndex(item.GetIndex()), AxisAnchor);
+                        Vector2 newPos = new Vector2(GetItemXPosByIndex(item.GetIndex()), GetItemYPosByIndex(item.GetIndex()));
                                 
                         if (!LowPerformance)
                         {
@@ -523,62 +494,129 @@ namespace Wayfarer.UI.Controls
                         }
                     }
                 }
-                else if (SortDirection == SortDirection.Left)
+            }
+        }
+
+        private float GetItemXPosByIndexNoWrap(int idx)
+        {
+            if (OrganizingMode == OrganizingMode.Horizontal)
+            {
+                float currEndX = GetFirstItemXPos();
+
+                if (RegularSizeChildren)
                 {
-                    if (Math.Abs(item.RectPosition.x - GetItemXPosByIndex(item.GetIndex())) > SortPrecision || Math.Abs(item.RectPosition.y - AxisAnchor) > SortPrecision)
+                    if (SortDirection == SortDirection.Forward)
                     {
-                        Vector2 newPos = new Vector2(GetItemXPosByIndex(item.GetIndex()), AxisAnchor);
-                                
-                        if (!LowPerformance)
-                        {
-                            _tween.Stop(item, "rect_position");
-                        }
-                        _tween.InterpolateProperty(item, "rect_position", item.RectPosition, newPos,
-                            SortAnimDuration, Tween.TransitionType.Cubic, Tween.EaseType.Out);
-                                
-                        if (!_tween.IsActive())
-                        {
-                            _tween.Start();
-                        }
+                        return currEndX + (idx * (RegularSize.x + Separation));
+                    }
+                    else if (SortDirection == SortDirection.Backward)
+                    {
+                        return currEndX - (idx * (RegularSize.x + Separation));
                     }
                 }
+                else
+                {
+                    foreach (Node node in GetChildren())
+                    {
+                        if (node is OrganizableItem item && item.GetIndex() <= idx - 1)
+                        {
+                            if (SortDirection == SortDirection.Forward)
+                            {
+                                currEndX += (item.RectSize.x + Separation);
+                            }
+                            else if (SortDirection == SortDirection.Backward)
+                            {
+                                currEndX -= (item.RectSize.x + Separation);
+                            }
+                        }
+                        else break;
+                    }
+
+                    return currEndX;
+                }
             }
+            else if (OrganizingMode == OrganizingMode.Vertical)
+            {
+                return 0f; // TODO
+            }
+
+            return 0f;
         }
 
         private float GetItemXPosByIndex(int idx)
         {
-            float currEndX = GetFirstItemXPos();
-            
-            if (RegularSizeChildren)
+            if (OrganizingMode == OrganizingMode.Horizontal)
             {
-                if (SortDirection == SortDirection.Right)
+                if (Wrap)
                 {
-                    return currEndX + (idx * (RegularSize + Separation));
+                    int row = GetRowIdxByItemIdx(idx);
+                    int idxWithinRow = idx - GetFirstItemIdxInRow(row);
+                    
+                    return GetItemXPosByIndexNoWrap(row == 0 ? idxWithinRow : idxWithinRow - 1);
                 }
-                else if (SortDirection == SortDirection.Left)
+                else
                 {
-                    return currEndX - (idx * (RegularSize + Separation));
+                    return GetItemXPosByIndexNoWrap(idx);
                 }
             }
-            else
+            else if (OrganizingMode == OrganizingMode.Vertical)
             {
-                foreach (Node node in GetChildren())
-                {
-                    if (node is OrganizableItem item && item.GetIndex() <= idx - 1)
-                    {
-                        if (SortDirection == SortDirection.Right)
-                        {
-                            currEndX += (item.RectSize.x + Separation);
-                        }
-                        else if (SortDirection == SortDirection.Left)
-                        {
-                            currEndX -= (item.RectSize.x + Separation);
-                        }
-                    }
-                    else break;
-                }
+                return 0f; // TODO
+            }
 
-                return currEndX;
+            return 0f;
+        }
+
+        public float GetItemYPosByIndex(int idx)
+        {
+            if (OrganizingMode == OrganizingMode.Horizontal)
+            {
+                if (Wrap)
+                {
+                    int row = GetRowIdxByItemIdx(idx);
+                
+                    return ((GetRowHighestItemHeight(row) + Separation) * (row + 1)); 
+                }
+                else
+                {
+                    return GetRowHighestItemHeight(0) + Separation; 
+                }
+            }
+            else if (OrganizingMode == OrganizingMode.Vertical)
+            {
+                float currEndX = GetFirstItemXPos();
+            
+                if (RegularSizeChildren)
+                {
+                    if (SortDirection == SortDirection.Forward)
+                    {
+                        return currEndX + (idx * (RegularSize.y + Separation));
+                    }
+                    else if (SortDirection == SortDirection.Backward)
+                    {
+                        return currEndX - (idx * (RegularSize.y + Separation));
+                    }
+                }
+                else
+                {
+                    foreach (Node node in GetChildren())
+                    {
+                        if (node is OrganizableItem item && item.GetIndex() <= idx - 1)
+                        {
+                            if (SortDirection == SortDirection.Forward)
+                            {
+                                currEndX += (item.RectSize.x + Separation);
+                            }
+                            else if (SortDirection == SortDirection.Backward)
+                            {
+                                currEndX -= (item.RectSize.x + Separation);
+                            }
+                        }
+                        else break;
+                    }
+
+                    return currEndX;
+                }
             }
 
             return 0f;
@@ -591,13 +629,13 @@ namespace Wayfarer.UI.Controls
                 dir = SortDirection;
             }
             
-            if (dir == SortDirection.Right)
+            if (dir == SortDirection.Forward)
             {
-                GetFirstItemXPos(SortDirection.Left);
+                GetFirstItemXPos(SortDirection.Backward);
             }
-            else if (dir == SortDirection.Left)
+            else if (dir == SortDirection.Backward)
             {
-                GetFirstItemXPos(SortDirection.Right);
+                GetFirstItemXPos(SortDirection.Forward);
             }
 
             return -1f;
@@ -610,28 +648,28 @@ namespace Wayfarer.UI.Controls
                 dir = SortDirection;
             }
             
-            if (dir == SortDirection.Right)
+            if (dir == SortDirection.Forward)
             {
                 switch (HorizontalAlignment)
                 {
                     case HorizontalAlignment.Left:
                         return SeparationOnEnds ? Separation : 0f;
                     case HorizontalAlignment.Center:
-                        return SeparationOnEnds ? Separation + (RectSize.x / 2) - (GetRowLength() / 2) : (RectSize.x / 2) - (GetRowLength() / 2);
+                        return SeparationOnEnds ? Separation + (RectSize.x / 2) - (GetRowMaxLength() / 2) : (RectSize.x / 2) - (GetRowMaxLength() / 2);
                     case HorizontalAlignment.Right:
-                        return SeparationOnEnds ? Separation + RectSize.x - GetRowLength() : RectSize.x - GetRowLength();
+                        return SeparationOnEnds ? Separation + RectSize.x - GetRowMaxLength() : RectSize.x - GetRowMaxLength();
                 }
             }
-            else if (dir == SortDirection.Left)
+            else if (dir == SortDirection.Backward)
             {
-                float lastSize = (RegularSizeChildren ? RegularSize : GetChild<Control>(GetChildCount() - 1).RectSize.x);
+                float lastSize = (RegularSizeChildren ? RegularSize.x : GetChild<Control>(GetChildCount() - 1).RectSize.x);
                 
                 switch (HorizontalAlignment)
                 {
                     case HorizontalAlignment.Left:
-                        return SeparationOnEnds ? GetRowLength() - lastSize - Separation : GetRowLength() - lastSize;
+                        return SeparationOnEnds ? GetRowMaxLength() - lastSize - Separation : GetRowMaxLength() - lastSize;
                     case HorizontalAlignment.Center:
-                        return SeparationOnEnds ? (RectSize.x / 2) + (GetRowLength() / 2) - lastSize - Separation : (RectSize.x / 2) + (GetRowLength() / 2) - lastSize;
+                        return SeparationOnEnds ? (RectSize.x / 2) + (GetRowMaxLength() / 2) - lastSize - Separation : (RectSize.x / 2) + (GetRowMaxLength() / 2) - lastSize;
                     case HorizontalAlignment.Right:
                         return SeparationOnEnds ? RectSize.x - lastSize - Separation : RectSize.x - lastSize;
                 }
@@ -640,7 +678,7 @@ namespace Wayfarer.UI.Controls
             return -1f;
         }
 
-        public float GetRowLength()
+        public float GetRowMaxLength()
         {
             if (OrganizingMode == OrganizingMode.Horizontal)
             {
@@ -648,7 +686,7 @@ namespace Wayfarer.UI.Controls
                 {
                     int count = GetChildCount();
 
-                    return SeparationOnEnds ? (RegularSize * count) + (Separation * (count + 1)) : (RegularSize * count) + (Separation * (count - 1));
+                    return SeparationOnEnds ? (RegularSize.x * count) + (Separation * (count + 1)) : (RegularSize.x * count) + (Separation * (count - 1));
                 }
                 else
                 {
@@ -676,7 +714,7 @@ namespace Wayfarer.UI.Controls
                 {
                     int count = GetChildCount();
 
-                    return SeparationOnEnds ? (RegularSize * count) + (Separation * (count + 1)) : (RegularSize * count) + (Separation * (count - 1));
+                    return SeparationOnEnds ? (RegularSize.y * count) + (Separation * (count + 1)) : (RegularSize.y * count) + (Separation * (count - 1));
                 }
                 else
                 {
@@ -702,6 +740,194 @@ namespace Wayfarer.UI.Controls
             return -1f;
         }
 
+        public int GetRowCount()
+        {
+            if (OrganizingMode == OrganizingMode.Horizontal)
+            {/*
+                if (RegularSizeChildren)
+                {
+                    return Mathf.FloorToInt(GetChildCount() / GetMaxItemCountForRow());
+                }
+                else*/
+                {
+                    int additiveCount = 0;
+                    for (int i = 0; i < 1000; i++)
+                    {
+                        int count = GetMaxItemCountForRow(i);
+
+                        if (count == -1)
+                        {
+                            return i + 1;
+                        }
+                        
+                        additiveCount += count > -1 ? count : 0;
+                        
+                        if (additiveCount <= GetChildCount() - 1)
+                        {
+                            continue;
+                        }
+                        
+                        return i + 1;
+                    }
+                }
+            }
+
+            return -1;
+        }
+
+        public float GetRowHighestItemHeight(int rowIdx)
+        {
+            if (RegularSizeChildren)
+            {
+                return RegularSize.y;
+            }
+            
+            float highest = 0f;
+            
+            for (int i = GetFirstItemIdxInRow(rowIdx); i < GetLastItemIdxInRow(rowIdx); i++)
+            {
+                Control child = GetChild<Control>(i);
+                float height = child.RectSize.y;
+                
+                if (height > highest)
+                {
+                    highest = height;
+                }
+            }
+
+            return highest;
+        }
+
+        public int GetFirstItemIdxInRow(int rowIdx)
+        {
+            int currRowLastItemIdx = -1;
+            for (int i = 0; i < GetRowCount(); i++)
+            {
+                if (i == rowIdx)
+                {
+                    return currRowLastItemIdx != -1 ? currRowLastItemIdx : 0;
+                }
+                
+                currRowLastItemIdx += GetMaxItemCountForRow(i);
+            }
+
+            return -1;
+        }
+
+        public int GetLastItemIdxInRow(int rowIdx)
+        {
+            int currRowLastItemIdx = -1;
+            for (int i = 0; i < GetRowCount(); i++)
+            {
+                currRowLastItemIdx += GetMaxItemCountForRow(i);
+                
+                if (i == rowIdx)
+                {
+                    return currRowLastItemIdx != -1 ? currRowLastItemIdx : 0;
+                }
+            }
+
+            return -1;
+        }
+
+        public int GetRowIdxByItemIdx(int itemIdx)
+        {
+            if (OrganizingMode == OrganizingMode.Horizontal)
+            {
+                if (RegularSizeChildren)
+                {
+                    for (int i = 0; i < GetRowCount(); i++)
+                    {
+                        if (itemIdx + 1 <= ((i + 1) * GetMaxItemCountForRow()))
+                        {
+                            return i;
+                        }
+                    }
+                }
+                else
+                {
+                    int additiveMaxItemCount = 0;
+                    for (int i = 0; i < GetRowCount(); i++)
+                    {
+                        
+                        int currRowItemCount = GetMaxItemCountForRow(i);
+                        additiveMaxItemCount += currRowItemCount > -1 ? currRowItemCount : 0;
+                        /*
+                        if (i == 2)
+                        {
+                            GD.Print("MAX ITEM FOR ROW = " + currRowItemCount);
+                            GD.Print("CURR ADDITIVE COUNT = " + additiveMaxItemCount);
+                            GD.Print("ITEM IDX = " + (itemIdx + 1));
+                        }
+*/
+                        if (itemIdx + 1 <= additiveMaxItemCount)
+                        {
+                            return i;
+                        }
+                        else
+                        {
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            return -1;
+        }
+
+        public int GetMaxItemCountForRow(int rowIdx = 0)
+        {
+            int currRow = 0;
+            int currAmountOnCurrRow = 1;
+            
+            if (OrganizingMode == OrganizingMode.Horizontal)
+            {
+                if (RegularSizeChildren)
+                {
+                    return Mathf.FloorToInt(RectSize.x / RegularSize.x);
+                }
+                else
+                {
+                    float currWidth = SeparationOnEnds ? Separation : 0f;
+                    
+                    foreach (Node node in GetChildren())
+                    {
+                        if (node is OrganizableItem item)
+                        {
+                            currWidth += item.RectSize.x + Separation;
+
+                            if (currWidth >= (SeparationOnEnds ? RectSize.x - Separation : RectSize.x) - (item.RectSize.x * SortPrecision))
+                            {
+                                if (currRow == rowIdx)
+                                {
+                                    return currAmountOnCurrRow;
+                                }
+                                else if (currRow > rowIdx)
+                                {
+                                    // just a sanity check in case something goes wrong somehow
+                                    return currAmountOnCurrRow;
+                                }
+                                currRow++;
+                                currAmountOnCurrRow = 1;
+                                currWidth = SeparationOnEnds ? Separation : 0f;
+                                continue;
+                            }
+                            
+                            currAmountOnCurrRow++;
+                        }
+                    }
+                    
+                    if (currRow == rowIdx)
+                    {
+                        // this means that we didn't exceed the width limit -> non-full row, so we'll just return curr amount
+                        return currAmountOnCurrRow;
+                    }
+                }
+            }
+            
+            return -1;
+        }
+
         public bool IsSortDone()
         {
             if (OrganizingMode == OrganizingMode.Horizontal)
@@ -710,7 +936,7 @@ namespace Wayfarer.UI.Controls
                 {
                     if (node is OrganizableItem item && !item.IsDragged)
                     {
-                        if (Math.Abs(item.RectPosition.y - AxisAnchor) > SortPrecision)
+                        if (Math.Abs(item.RectPosition.y - GetItemYPosByIndex(item.GetIndex())) > SortPrecision)
                         {
                             return false;
                         }
@@ -796,18 +1022,22 @@ namespace Wayfarer.UI.Controls
         public void SetRegularSizedChildren(bool value)
         {
             _regularSizeChildren = value;
+
+            bool first = true;
             
-            if (GetChildCount() > 0)
+            foreach (Node node in GetChildren())
             {
-                Control child = GetChild<Control>(0);
-                
-                if (OrganizingMode == OrganizingMode.Horizontal)
+                if (node is OrganizableItem item)
                 {
-                    _regularSize = child.RectSize.x;
-                }
-                else if (OrganizingMode == OrganizingMode.Vertical)
-                {
-                    _regularSize = child.RectSize.y;
+                    if (first)
+                    {
+                        _regularSize = item.RectSize;
+                        first = false;
+                        continue;
+                    }
+                    
+                    item.RectSize = RegularSize;
+                    return;
                 }
             }
         }
@@ -827,8 +1057,8 @@ namespace Wayfarer.UI.Controls
 
     public enum SortDirection
     {
-        Right,
-        Left,
+        Forward,
+        Backward,
         Undefined
     }
 
