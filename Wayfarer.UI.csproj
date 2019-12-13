@@ -42,11 +42,11 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="GodotSharp">
-      <HintPath>$(ProjectDir)\..\..\.mono\assemblies\GodotSharp.dll</HintPath>
+      <HintPath>$(ProjectDir)\..\..\.mono\assemblies\Release\GodotSharp.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="GodotSharpEditor" Condition=" '$(Configuration)' == 'Tools' ">
-      <HintPath>$(ProjectDir)\..\..\.mono\assemblies\GodotSharpEditor.dll</HintPath>
+      <HintPath>$(ProjectDir)\..\..\.mono\assemblies\Release\GodotSharpEditor.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>
